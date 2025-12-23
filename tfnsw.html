@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wolli Creek Dashboard</title>
+    <style>
+        :root { --font: 'Arial', sans-serif; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; height: 100vh; width: 100vw;
+            display: block;
+            font-family: var(--font); background-color: white; overflow: hidden;
+        }
+        #grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Setup/Key Entry Screen */
+        #setup-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; z-index: 100; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; padding: 20px; text-align: center;
+        }
+        input { font-size: 20px; padding: 10px; width: 80%; margin: 20px 0; border: 2px solid black; }
+        button { font-size: 20px; padding: 10px 30px; background: black; color: white; border: none; cursor: pointer; }
+
+        /* Quadrant Styling */
+        .quadrant {
+            border: 2px solid black; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; padding: 18px; text-align: center;
+            gap: 8px;
+        }
+        .q-city-t4 { background: black; color: white; }
+        .q-city-t8 { background: white; color: black; }
+        .q-south-t4 { background: white; color: black; }
+        .q-south-t8 { background: black; color: white; }
+
+        .label { font-size: 2.6vh; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
+        .timer { font-size: 12vh; font-weight: 900; line-height: 0.95; margin: 4px 0; }
+        .meta { font-size: 2vh; line-height: 1.35; display: flex; flex-direction: column; gap: 4px; }
+        .meta-line.meta-primary { font-weight: 800; }
+        .meta-line.meta-next { font-weight: 700; opacity: 0.9; }
+        .unit { font-size: 1.9vh; text-transform: uppercase; letter-spacing: 0.08em; }
+
+        #reset-btn {
+            position: fixed; bottom: 5px; left: 50%; transform: translateX(-50%);
+            font-size: 10px; opacity: 0.3; background: none; color: gray; border: 1px solid gray;
+        }
+
+        #error { color: red; font-size: 14px; max-width: 480px; }
+        #updated-at { position: fixed; top: 5px; right: 10px; font-size: 10px; color: gray; }
+    </style>
+</head>
+<body>
+    <div id="setup-overlay">
+        <h1>Enter TfNSW API key</h1>
+        <p>Stored locally so you do not need to re-enter next time.</p>
+        <input id="api-key-input" type="password" placeholder="Ocp-Apim-Subscription-Key">
+        <button id="start-btn">Start</button>
+        <div id="error"></div>
+    </div>
+
+    <div id="grid">
+        <div class="quadrant q-city-t4" id="q-city-t4">
+            <div class="label">T4 to City</div>
+            <div class="timer" data-line="T4" data-direction="city">--</div>
+            <div class="meta" data-meta="T4-city">Waiting for data…</div>
+        </div>
+        <div class="quadrant q-city-t8" id="q-city-t8">
+            <div class="label">T8 to City</div>
+            <div class="timer" data-line="T8" data-direction="city">--</div>
+            <div class="meta" data-meta="T8-city">Waiting for data…</div>
+        </div>
+        <div class="quadrant q-south-t4" id="q-south-t4">
+            <div class="label">T4 away from City</div>
+            <div class="timer" data-line="T4" data-direction="south">--</div>
+            <div class="meta" data-meta="T4-south">Waiting for data…</div>
+        </div>
+        <div class="quadrant q-south-t8" id="q-south-t8">
+            <div class="label">T8 away from City</div>
+            <div class="timer" data-line="T8" data-direction="south">--</div>
+            <div class="meta" data-meta="T8-south">Waiting for data…</div>
+        </div>
+    </div>
+
+    <button id="reset-btn" title="Clear stored key">Reset</button>
+    <div id="updated-at"></div>
+
+    <script>
+        // Minimal single-file dashboard for Wolli Creek departures.
+        const WALK_BUFFER_MIN = 5; // time to walk from house to station
+        const STATION_NAME = "Wolli Creek Station";
+        const REFRESH_MS = 30_000;
+        const PROXY_URL = "http://localhost:3000"; // local proxy to handle CORS
+
+        const overlay = document.getElementById("setup-overlay");
+        const apiInput = document.getElementById("api-key-input");
+        const errorBox = document.getElementById("error");
+        const updatedAt = document.getElementById("updated-at");
+
+        const resetBtn = document.getElementById("reset-btn");
+        const timers = document.querySelectorAll(".timer");
+
+        resetBtn.addEventListener("click", () => {
+            localStorage.removeItem("tfnswApiKey");
+            location.reload();
+        });
+
+        document.getElementById("start-btn").addEventListener("click", () => {
+            const key = apiInput.value.trim();
+            if (!key) {
+                setError("Please enter a valid TfNSW subscription key.");
+                return;
+            }
+            localStorage.setItem("tfnswApiKey", key);
+            hideOverlay();
+            init();
+        });
+
+        const saved = localStorage.getItem("tfnswApiKey");
+        if (saved) {
+            apiInput.value = saved;
+            hideOverlay();
+            init();
+        }
+
+        function hideOverlay() {
+            overlay.style.display = "none";
+        }
+
+        function setError(msg) {
+            errorBox.textContent = msg;
+        }
+
+        async function init() {
+            try {
+                await refresh();
+                setInterval(refresh, REFRESH_MS);
+            } catch (err) {
+                setError(err.message || String(err));
+                overlay.style.display = "flex";
+            }
+        }
+
+        async function refresh() {
+            const key = localStorage.getItem("tfnswApiKey");
+            if (!key) return;
+
+            const stopId = await resolveStopId(key, STATION_NAME);
+            const departures = await fetchDepartures(key, stopId);
+
+            const slots = {
+                "T4-city": pickNext(departures, "T4", true),
+                "T8-city": pickNext(departures, "T8", true),
+                "T4-south": pickNext(departures, "T4", false),
+                "T8-south": pickNext(departures, "T8", false),
+            };
+
+            Object.entries(slots).forEach(([slot, info]) => updateSlot(slot, info));
+            updatedAt.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+        }
+
+        function pickNext(list, line, toCity) {
+            // Heuristic destination matching to split city-bound vs away.
+            const cityHints = ["Central", "Town Hall", "Wynyard", "Circular Quay", "Martin Place", "Redfern", "City Circle", "Museum", "St James", "Green Square", "Airport", "Domestic", "International", "Mascot"];
+            const lineMatches = list.filter(item => item.line.startsWith(line));
+            const dirMatches = lineMatches
+                .filter(item => toCity ? cityHints.some(h => item.destination.includes(h)) : !cityHints.some(h => item.destination.includes(h)))
+                .sort((a, b) => a.departure - b.departure);
+            return { service: dirMatches[0], next: dirMatches[1], totalLine: lineMatches.length, totalDir: dirMatches.length };
+        }
+
+        function updateSlot(slotKey, info) {
+            const [line, dir] = slotKey.split("-");
+            const timerEl = document.querySelector(`.timer[data-line="${line}"][data-direction="${dir.includes("city") ? "city" : "south"}"]`);
+            const metaEl = document.querySelector(`[data-meta="${slotKey}"]`);
+            const service = info?.service;
+            if (!service) {
+                timerEl.textContent = "--";
+                metaEl.textContent = `No service found soon (${info?.totalDir || 0}/${info?.totalLine || 0})`;
+                return;
+            }
+
+            const leaveInMin = Math.max(0, Math.floor((service.departure - Date.now()) / 60000) - WALK_BUFFER_MIN);
+            timerEl.textContent = formatLeave(leaveInMin);
+            const depTime = new Date(service.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            const next = info?.next;
+            const nextLine = next ? `<div class="meta-line meta-next">Next: ${next.destination} at ${new Date(next.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} (walk ${WALK_BUFFER_MIN}m)</div>` : "";
+            metaEl.innerHTML = `<div class="meta-line meta-primary">${service.destination} at ${depTime} (walk ${WALK_BUFFER_MIN}m)</div>${nextLine}`;
+        }
+
+        function formatLeave(mins) {
+            const m = Math.max(0, mins);
+            if (m < 60) return `${m}m`;
+            const h = Math.floor(m / 60);
+            const rem = m % 60;
+            if (rem === 0) return `${h}h`;
+            return `${h}h ${rem}m`;
+        }
+
+        async function resolveStopId(key, name) {
+            const url = new URL(PROXY_URL + "/stop_finder");
+            url.searchParams.set("name", name);
+            const resp = await fetch(url, { headers: { "x-api-key": key }, cache: "no-store" });
+            if (!resp.ok) throw new Error("Unable to find stop id. Check API key/proxy.");
+            const data = await resp.json();
+            const match = data?.locations?.find(loc => loc.type === "stop" || loc.type === "station");
+            if (!match) throw new Error("Stop not found for " + name);
+            return match.id;
+        }
+
+        async function fetchDepartures(key, stopId) {
+            const url = new URL(PROXY_URL + "/departures");
+            url.searchParams.set("stopId", stopId);
+
+            const resp = await fetch(url, { headers: { "x-api-key": key }, cache: "no-store" });
+            if (!resp.ok) throw new Error("Failed to load departures. Check key/quota.");
+            const data = await resp.json();
+            const raw = data?.stopEvents || [];
+            return raw.map(ev => {
+                const prod = ev.transportation?.number || ev.transportation?.name || "";
+                const dest = ev.transportation?.destination?.name || "";
+                const planned = ev.dateTime?.target || ev.departureTimePlanned;
+                const realtime = ev.dateTime?.rt || ev.departureTimeEstimated;
+                const ts = (realtime || planned) ? new Date(realtime || planned).getTime() : 0;
+                return { line: (prod || "").toUpperCase(), destination: dest, departure: ts };
+            }).filter(item => item.departure > Date.now());
+        }
+    </script>
+</body>
+</html>
