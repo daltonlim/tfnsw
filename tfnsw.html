@@ -85,6 +85,33 @@ button {
     gap: 14px;
 }
 
+/* Alternate colors: top right and bottom left are white with black text */
+#q-city-t8,
+#q-south-t4 {
+    background: #fff;
+    color: #000;
+}
+
+#q-city-t8 .meta-secondary,
+#q-south-t4 .meta-secondary {
+    color: rgba(0, 0, 0, 0.55);
+}
+
+#q-city-t8 .meta-next,
+#q-south-t4 .meta-next {
+    color: rgba(0, 0, 0, 0.35);
+}
+
+#q-city-t8 .direction,
+#q-south-t4 .direction {
+    opacity: 0.65;
+}
+
+#q-city-t8 .timer .unit,
+#q-south-t4 .timer .unit {
+    opacity: 0.55;
+}
+
 /* Header row */
 .header {
     display: flex;
@@ -138,12 +165,12 @@ button {
 }
 
 .meta-secondary {
-    font-size: 2vh;
+    font-size: 2.2vh;
     color: var(--muted);
 }
 
 .meta-next {
-    font-size: 1.8vh;
+    font-size: 2.2vh;
     color: var(--faint);
 }
 
@@ -325,7 +352,7 @@ button {
             const dirMatches = lineMatches
                 .filter(item => toCity ? cityHints.some(h => item.destination.includes(h)) : !cityHints.some(h => item.destination.includes(h)))
                 .sort((a, b) => a.departure - b.departure);
-            return { service: dirMatches[0], next: dirMatches[1], totalLine: lineMatches.length, totalDir: dirMatches.length };
+            return { service: dirMatches[0], next: dirMatches[1], next2: dirMatches[2], totalLine: lineMatches.length, totalDir: dirMatches.length };
         }
 
         function updateSlot(slotKey, info) {
@@ -339,16 +366,28 @@ button {
                 return;
             }
 
-            const leaveInMin = Math.max(0, Math.floor((service.departure - Date.now()) / 60000) - WALK_BUFFER_MIN);
+            const leaveInMin = Math.floor((service.departure - Date.now()) / 60000) - WALK_BUFFER_MIN;
             timerEl.textContent = formatLeave(leaveInMin);
             const depTime = new Date(service.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-            const next = info?.next;
-            const nextLine = next ? `<div class="meta-line meta-next">Next: ${next.destination} at ${new Date(next.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} (walk ${WALK_BUFFER_MIN}m)</div>` : "";
-            metaEl.innerHTML = `<div class="meta-line meta-primary">${service.destination} at ${depTime} (walk ${WALK_BUFFER_MIN}m)</div>${nextLine}`;
+            
+            const nextLines = [];
+            if (info?.next) {
+                const nextLeaveInMin = Math.floor((info.next.departure - Date.now()) / 60000) - WALK_BUFFER_MIN;
+                const nextDepTime = new Date(info.next.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                nextLines.push(`<div class="meta-line meta-next">Next: ${info.next.destination} at ${nextDepTime} (${formatLeave(nextLeaveInMin)})</div>`);
+            }
+            if (info?.next2) {
+                const next2LeaveInMin = Math.floor((info.next2.departure - Date.now()) / 60000) - WALK_BUFFER_MIN;
+                const next2DepTime = new Date(info.next2.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                nextLines.push(`<div class="meta-line meta-next">Then: ${info.next2.destination} at ${next2DepTime} (${formatLeave(next2LeaveInMin)})</div>`);
+            }
+            
+            metaEl.innerHTML = `<div class="meta-line meta-primary">${service.destination} at ${depTime} (${formatLeave(leaveInMin)})</div>${nextLines.join('')}`;
         }
 
         function formatLeave(mins) {
-            const m = Math.max(0, mins);
+            const m = mins;
+            if (m < 0) return `${m}m`;
             if (m < 60) return `${m}m`;
             const h = Math.floor(m / 60);
             const rem = m % 60;
