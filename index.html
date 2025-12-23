@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wolli Creek Dashboard</title>
+
+<style>
+:root {
+    --bg: #111;
+    --panel: #161616;
+    --text: #ffffff;
+    --muted: rgba(255,255,255,0.55);
+    --faint: rgba(255,255,255,0.35);
+    --urgent: #ffb000;
+
+    --t4: #2d6cdf;
+    --t8: #1aa15f;
+
+    --font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    height: 100vh;
+    width: 100vw;
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+}
+
+#grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    height: 100vh;
+    width: 100vw;
+    gap: 1px;
+    background: #000;
+}
+
+/* ───────── Setup Overlay ───────── */
+
+#setup-overlay {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    color: #000;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+}
+
+/* ───────── Settings Overlay ───────── */
+
+#settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    z-index: 99;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+}
+
+#settings-overlay.visible {
+    display: flex;
+}
+
+#settings-content {
+    background: #fff;
+    color: #000;
+    padding: 32px;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 100%;
+}
+
+#settings-content h2 {
+    margin-top: 0;
+    margin-bottom: 24px;
+}
+
+.setting-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.setting-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.setting-group input {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.button-group {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+
+input {
+    font-size: 18px;
+    padding: 12px;
+    width: 320px;
+    margin: 16px 0;
+    border: 2px solid #000;
+}
+
+button {
+    font-size: 18px;
+    padding: 10px 28px;
+    background: #000;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+}
+
+/* ───────── Quadrants ───────── */
+
+.quadrant {
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    gap: 14px;
+}
+
+/* Alternate colors: top right and bottom left are white with black text */
+#q-city-t8,
+#q-south-t4 {
+    background: #fff;
+    color: #000;
+}
+
+#q-city-t8 .meta-secondary,
+#q-south-t4 .meta-secondary {
+    color: rgba(0, 0, 0, 0.55);
+}
+
+#q-city-t8 .meta-next,
+#q-south-t4 .meta-next {
+    color: rgba(0, 0, 0, 0.35);
+}
+
+#q-city-t8 .direction,
+#q-south-t4 .direction {
+    opacity: 0.65;
+}
+
+#q-city-t8 .timer .unit,
+#q-south-t4 .timer .unit {
+    opacity: 0.55;
+}
+
+/* Header row */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 2.4vh;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.line-pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: 0.9em;
+}
+
+.t4 { background: var(--t4); }
+.t8 { background: var(--t8); }
+
+.direction {
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+
+/* Time */
+.timer {
+    font-size: 11vh;
+    font-weight: 900;
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+}
+
+.timer .unit {
+    font-size: 0.38em;
+    font-weight: 700;
+    opacity: 0.75;
+    margin-left: 4px;
+}
+
+/* Meta */
+.meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.meta-primary {
+    font-size: 2.4vh;
+    font-weight: 700;
+}
+
+.meta-secondary {
+    font-size: 2.2vh;
+    color: var(--muted);
+}
+
+.meta-next {
+    font-size: 2.2vh;
+    color: var(--faint);
+}
+
+/* Urgent state (JS can toggle this) */
+.urgent .timer {
+    color: var(--urgent);
+}
+
+/* Footer bits */
+#updated-at {
+    position: fixed;
+    top: 6px;
+    right: 10px;
+    font-size: 10px;
+    color: var(--faint);
+}
+
+#reset-btn,
+#settings-btn {
+    position: fixed;
+    bottom: 6px;
+    font-size: 10px;
+    opacity: 0.25;
+    background: none;
+    color: #888;
+    border: 1px solid #666;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+#reset-btn {
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+#settings-btn {
+    right: 6px;
+}
+
+#reset-btn:hover,
+#settings-btn:hover {
+    opacity: 0.5;
+}
+</style>
+</head>
+
+<body>
+
+<div id="setup-overlay">
+    <h1>Enter TfNSW API key</h1>
+    <p>Stored locally so you do not need to re-enter next time.</p>
+    <input id="api-key-input" type="password" placeholder="Ocp-Apim-Subscription-Key">
+    <button id="start-btn">Start</button>
+    <div id="error"></div>
+</div>
+
+<div id="settings-overlay">
+    <div id="settings-content">
+        <h2>Settings</h2>
+        <div class="setting-group">
+            <label for="walk-buffer-input">Walk Time (minutes)</label>
+            <input id="walk-buffer-input" type="number" min="0" placeholder="5">
+        </div>
+        <div class="setting-group">
+            <label for="station-name-input">Station Name</label>
+            <input id="station-name-input" type="text" list="station-list" placeholder="Search for station..." autocomplete="off">
+            <datalist id="station-list"></datalist>
+            <div id="station-search-status" style="font-size: 12px; color: #666; margin-top: 4px;"></div>
+        </div>
+        <div class="setting-group">
+            <label for="refresh-interval-input">Refresh Interval (seconds)</label>
+            <input id="refresh-interval-input" type="number" min="5" placeholder="30">
+        </div>
+        <div class="button-group">
+            <button id="settings-cancel-btn">Cancel</button>
+            <button id="settings-save-btn">Save</button>
+        </div>
+    </div>
+</div>
+
+<div id="grid">
+
+    <div class="quadrant" id="q-city-t4">
+        <div class="header">
+            <span class="line-pill t4">T4</span>
+            <span class="direction">→ To City</span>
+        </div>
+        <div class="timer" data-line="T4" data-direction="city">
+            --<span class="unit">m</span>
+        </div>
+        <div class="meta" data-meta="T4-city">
+            <div class="meta-primary">Waiting for data…</div>
+        </div>
+    </div>
+
+    <div class="quadrant" id="q-city-t8">
+        <div class="header">
+            <span class="line-pill t8">T8</span>
+            <span class="direction">→ To City</span>
+        </div>
+        <div class="timer" data-line="T8" data-direction="city">
+            --<span class="unit">m</span>
+        </div>
+        <div class="meta" data-meta="T8-city">
+            <div class="meta-primary">Waiting for data…</div>
+        </div>
+    </div>
+
+    <div class="quadrant" id="q-south-t4">
+        <div class="header">
+            <span class="line-pill t4">T4</span>
+            <span class="direction">← Away</span>
+        </div>
+        <div class="timer" data-line="T4" data-direction="south">
+            --<span class="unit">m</span>
+        </div>
+        <div class="meta" data-meta="T4-south">
+            <div class="meta-primary">Waiting for data…</div>
+        </div>
+    </div>
+
+    <div class="quadrant" id="q-south-t8">
+        <div class="header">
+            <span class="line-pill t8">T8</span>
+            <span class="direction">← Away</span>
+        </div>
+        <div class="timer" data-line="T8" data-direction="south">
+            --<span class="unit">m</span>
+        </div>
+        <div class="meta" data-meta="T8-south">
+            <div class="meta-primary">Waiting for data…</div>
+        </div>
+    </div>
+
+</div>
+
+<button id="reset-btn">Reset</button>
+<button id="settings-btn">Settings</button>
+<div id="updated-at"></div>
+
+    <script>
+        // Minimal single-file dashboard for Wolli Creek departures.
+        // Using free CORS proxy service
+        // Note: Many free proxies don't forward custom headers. If this doesn't work,
+        // you may need to use a proxy that supports headers or deploy your own backend.
+        // Alternative proxies to try: corsproxy.io, cors-anywhere, etc.
+        const CORS_PROXY = "https://corsproxy.io/?";
+        const TFNSW_API_BASE = "https://api.transport.nsw.gov.au/v1/tp";
+
+        // Settings management
+        function getWalkBuffer() {
+            const stored = localStorage.getItem("tfnswWalkBuffer");
+            return stored ? parseInt(stored, 10) : 5;
+        }
+
+        function getStationName() {
+            return localStorage.getItem("tfnswStationName") || "Wolli Creek Station";
+        }
+
+        function getRefreshInterval() {
+            const stored = localStorage.getItem("tfnswRefreshInterval");
+            return stored ? parseInt(stored, 10) : 30_000;
+        }
+
+        function saveSettings() {
+            const walkBuffer = parseInt(document.getElementById("walk-buffer-input").value, 10);
+            const stationName = document.getElementById("station-name-input").value.trim();
+            const refreshInterval = parseInt(document.getElementById("refresh-interval-input").value, 10) * 1000;
+
+            if (walkBuffer >= 0) localStorage.setItem("tfnswWalkBuffer", walkBuffer);
+            if (stationName) localStorage.setItem("tfnswStationName", stationName);
+            if (refreshInterval >= 5000) localStorage.setItem("tfnswRefreshInterval", refreshInterval);
+        }
+
+        function loadSettings() {
+            document.getElementById("walk-buffer-input").value = getWalkBuffer();
+            document.getElementById("station-name-input").value = getStationName();
+            document.getElementById("refresh-interval-input").value = getRefreshInterval() / 1000;
+            // Clear previous search results
+            document.getElementById("station-list").innerHTML = "";
+            document.getElementById("station-search-status").textContent = "";
+        }
+
+        let stationSearchTimeout = null;
+        let stationSearchSetup = false;
+        async function searchStations(query) {
+            if (!query || query.length < 2) {
+                document.getElementById("station-list").innerHTML = "";
+                document.getElementById("station-search-status").textContent = "";
+                return;
+            }
+
+            const key = localStorage.getItem("tfnswApiKey");
+            if (!key) {
+                document.getElementById("station-search-status").textContent = "API key required";
+                return;
+            }
+
+            document.getElementById("station-search-status").textContent = "Searching...";
+
+            try {
+                const apiUrl = new URL(TFNSW_API_BASE + "/stop_finder");
+                apiUrl.searchParams.set("outputFormat", "rapidJSON");
+                apiUrl.searchParams.set("type_sf", "any");
+                apiUrl.searchParams.set("name_sf", query);
+                
+                const proxyUrl = CORS_PROXY + encodeURIComponent(apiUrl.toString());
+                const resp = await fetch(proxyUrl, { 
+                    headers: { 
+                        "Authorization": "apikey " + key,
+                        "X-Requested-With": "XMLHttpRequest"
+                    },
+                    cache: "no-store" 
+                });
+                if (!resp.ok) throw new Error("Search failed");
+                const data = await resp.json();
+                
+                const stations = (data?.locations || [])
+                    .filter(loc => {
+                        const name = (loc.name || loc.disassembledName || "").toLowerCase();
+                        return name.includes("station") && loc.type === "stop";
+                    })
+                    .slice(0, 20) // Limit to 20 results
+                    .map(loc => ({
+                        name: loc.name || loc.disassembledName || "",
+                        id: loc.id
+                    }));
+
+                const datalist = document.getElementById("station-list");
+                datalist.innerHTML = stations.map(s => `<option value="${s.name}">${s.name}</option>`).join("");
+                
+                if (stations.length === 0) {
+                    document.getElementById("station-search-status").textContent = "No stations found";
+                } else {
+                    document.getElementById("station-search-status").textContent = `${stations.length} station(s) found`;
+                }
+            } catch (err) {
+                document.getElementById("station-search-status").textContent = "Search error";
+                document.getElementById("station-list").innerHTML = "";
+            }
+        }
+
+        function setupStationSearch() {
+            if (stationSearchSetup) return; // Already set up
+            const stationInput = document.getElementById("station-name-input");
+            if (!stationInput) return; // Element not found
+            stationInput.addEventListener("input", (e) => {
+                clearTimeout(stationSearchTimeout);
+                const query = e.target.value.trim();
+                stationSearchTimeout = setTimeout(() => searchStations(query), 300); // Debounce 300ms
+            });
+            stationSearchSetup = true;
+        }
+
+        let refreshIntervalId = null;
+
+        const overlay = document.getElementById("setup-overlay");
+        const settingsOverlay = document.getElementById("settings-overlay");
+        const apiInput = document.getElementById("api-key-input");
+        const errorBox = document.getElementById("error");
+        const updatedAt = document.getElementById("updated-at");
+
+        const resetBtn = document.getElementById("reset-btn");
+        const settingsBtn = document.getElementById("settings-btn");
+        const settingsSaveBtn = document.getElementById("settings-save-btn");
+        const settingsCancelBtn = document.getElementById("settings-cancel-btn");
+        const timers = document.querySelectorAll(".timer");
+
+        resetBtn.addEventListener("click", () => {
+            localStorage.removeItem("tfnswApiKey");
+            location.reload();
+        });
+
+        settingsBtn.addEventListener("click", () => {
+            loadSettings();
+            settingsOverlay.classList.add("visible");
+        });
+
+        settingsCancelBtn.addEventListener("click", () => {
+            settingsOverlay.classList.remove("visible");
+        });
+
+        settingsSaveBtn.addEventListener("click", () => {
+            saveSettings();
+            settingsOverlay.classList.remove("visible");
+            // Reload to apply new settings
+            location.reload();
+        });
+
+        document.getElementById("start-btn").addEventListener("click", () => {
+            const key = apiInput.value.trim();
+            if (!key) {
+                setError("Please enter a valid TfNSW subscription key.");
+                return;
+            }
+            localStorage.setItem("tfnswApiKey", key);
+            hideOverlay();
+            init();
+        });
+
+        const saved = localStorage.getItem("tfnswApiKey");
+        if (saved) {
+            apiInput.value = saved;
+            hideOverlay();
+            init();
+        }
+
+        // Setup station search on page load
+        setupStationSearch();
+
+        function hideOverlay() {
+            overlay.style.display = "none";
+        }
+
+        function setError(msg) {
+            errorBox.textContent = msg;
+        }
+
+        async function init() {
+            try {
+                await refresh();
+                if (refreshIntervalId) clearInterval(refreshIntervalId);
+                refreshIntervalId = setInterval(refresh, getRefreshInterval());
+            } catch (err) {
+                setError(err.message || String(err));
+                overlay.style.display = "flex";
+            }
+        }
+
+        async function refresh() {
+            const key = localStorage.getItem("tfnswApiKey");
+            if (!key) return;
+
+            const stopId = await resolveStopId(key, getStationName());
+            const departures = await fetchDepartures(key, stopId);
+
+            const slots = {
+                "T4-city": pickNext(departures, "T4", true),
+                "T8-city": pickNext(departures, "T8", true),
+                "T4-south": pickNext(departures, "T4", false),
+                "T8-south": pickNext(departures, "T8", false),
+            };
+
+            Object.entries(slots).forEach(([slot, info]) => updateSlot(slot, info));
+            updatedAt.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+        }
+
+        function pickNext(list, line, toCity) {
+            // Heuristic destination matching to split city-bound vs away.
+            const cityHints = ["Central", "Town Hall", "Wynyard", "Circular Quay", "Martin Place", "Redfern", "City Circle", "Museum", "St James", "Green Square", "Airport", "Domestic", "International", "Mascot"];
+            const lineMatches = list.filter(item => item.line.startsWith(line));
+            const dirMatches = lineMatches
+                .filter(item => toCity ? cityHints.some(h => item.destination.includes(h)) : !cityHints.some(h => item.destination.includes(h)))
+                .sort((a, b) => a.departure - b.departure);
+            return { service: dirMatches[0], next: dirMatches[1], next2: dirMatches[2], totalLine: lineMatches.length, totalDir: dirMatches.length };
+        }
+
+        function updateSlot(slotKey, info) {
+            const [line, dir] = slotKey.split("-");
+            const timerEl = document.querySelector(`.timer[data-line="${line}"][data-direction="${dir.includes("city") ? "city" : "south"}"]`);
+            const metaEl = document.querySelector(`[data-meta="${slotKey}"]`);
+            const service = info?.service;
+            if (!service) {
+                timerEl.textContent = "--";
+                metaEl.textContent = `No service found soon (${info?.totalDir || 0}/${info?.totalLine || 0})`;
+                return;
+            }
+
+            const walkBuffer = getWalkBuffer();
+            const leaveInMin = Math.floor((service.departure - Date.now()) / 60000) - walkBuffer;
+            timerEl.textContent = formatLeave(leaveInMin);
+            const depTime = new Date(service.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            
+            const nextLines = [];
+            if (info?.next) {
+                const nextLeaveInMin = Math.floor((info.next.departure - Date.now()) / 60000) - walkBuffer;
+                const nextDepTime = new Date(info.next.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                nextLines.push(`<div class="meta-line meta-next">Next: ${info.next.destination} at ${nextDepTime} (${formatLeave(nextLeaveInMin)})</div>`);
+            }
+            if (info?.next2) {
+                const next2LeaveInMin = Math.floor((info.next2.departure - Date.now()) / 60000) - walkBuffer;
+                const next2DepTime = new Date(info.next2.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                nextLines.push(`<div class="meta-line meta-next">Then: ${info.next2.destination} at ${next2DepTime} (${formatLeave(next2LeaveInMin)})</div>`);
+            }
+            
+            metaEl.innerHTML = `<div class="meta-line meta-primary">${service.destination} at ${depTime} (${formatLeave(leaveInMin)})</div>${nextLines.join('')}`;
+        }
+
+        function formatLeave(mins) {
+            const m = mins;
+            if (m < 0) return `${m}m`;
+            if (m < 60) return `${m}m`;
+            const h = Math.floor(m / 60);
+            const rem = m % 60;
+            if (rem === 0) return `${h}h`;
+            return `${h}h ${rem}m`;
+        }
+
+        async function resolveStopId(key, name) {
+            const apiUrl = new URL(TFNSW_API_BASE + "/stop_finder");
+            apiUrl.searchParams.set("outputFormat", "rapidJSON");
+            apiUrl.searchParams.set("type_sf", "any");
+            apiUrl.searchParams.set("name_sf", name);
+            
+            const proxyUrl = CORS_PROXY + encodeURIComponent(apiUrl.toString());
+            const resp = await fetch(proxyUrl, { 
+                headers: { "Authorization": "apikey " + key },
+                cache: "no-store" 
+            });
+            if (!resp.ok) throw new Error("Unable to find stop id. Check API key/proxy.");
+            const data = await resp.json();
+            const match = data?.locations?.find(loc => {
+                const locName = (loc.name || loc.disassembledName || "").toLowerCase();
+                return locName.includes("station") && loc.type === "stop";
+            });
+            if (!match) throw new Error("Stop not found for " + name);
+            return match.id;
+        }
+
+        async function fetchDepartures(key, stopId) {
+            const apiUrl = new URL(TFNSW_API_BASE + "/departure_mon");
+            apiUrl.searchParams.set("outputFormat", "rapidJSON");
+            apiUrl.searchParams.set("type_dm", "stop");
+            apiUrl.searchParams.set("name_dm", stopId);
+            apiUrl.searchParams.set("mode", "direct");
+            apiUrl.searchParams.set("depArrMacro", "dep");
+            apiUrl.searchParams.set("TfNSWSF", "true");
+            apiUrl.searchParams.set("limit", "30");
+
+            const proxyUrl = CORS_PROXY + encodeURIComponent(apiUrl.toString());
+            const resp = await fetch(proxyUrl, { 
+                headers: { "Authorization": "apikey " + key },
+                cache: "no-store" 
+            });
+            if (!resp.ok) throw new Error("Failed to load departures. Check key/quota.");
+            const data = await resp.json();
+            const raw = data?.stopEvents || [];
+            return raw.map(ev => {
+                const prod = ev.transportation?.number || ev.transportation?.name || "";
+                const dest = ev.transportation?.destination?.name || "";
+                const planned = ev.dateTime?.target || ev.departureTimePlanned;
+                const realtime = ev.dateTime?.rt || ev.departureTimeEstimated;
+                const ts = (realtime || planned) ? new Date(realtime || planned).getTime() : 0;
+                return { line: (prod || "").toUpperCase(), destination: dest, departure: ts };
+            }).filter(item => item.departure > Date.now());
+        }
+    </script>
+</body>
+</html>
