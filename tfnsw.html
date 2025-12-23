@@ -1,95 +1,248 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wolli Creek Dashboard</title>
-    <style>
-        :root { --font: 'Arial', sans-serif; }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0; height: 100vh; width: 100vw;
-            display: block;
-            font-family: var(--font); background-color: white; overflow: hidden;
-        }
-        #grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 1fr 1fr;
-            height: 100vh;
-            width: 100vw;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wolli Creek Dashboard</title>
 
-        /* Setup/Key Entry Screen */
-        #setup-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: white; z-index: 100; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; padding: 20px; text-align: center;
-        }
-        input { font-size: 20px; padding: 10px; width: 80%; margin: 20px 0; border: 2px solid black; }
-        button { font-size: 20px; padding: 10px 30px; background: black; color: white; border: none; cursor: pointer; }
+<style>
+:root {
+    --bg: #111;
+    --panel: #161616;
+    --text: #ffffff;
+    --muted: rgba(255,255,255,0.55);
+    --faint: rgba(255,255,255,0.35);
+    --urgent: #ffb000;
 
-        /* Quadrant Styling */
-        .quadrant {
-            border: 2px solid black; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; padding: 18px; text-align: center;
-            gap: 8px;
-        }
-        .q-city-t4 { background: black; color: white; }
-        .q-city-t8 { background: white; color: black; }
-        .q-south-t4 { background: white; color: black; }
-        .q-south-t8 { background: black; color: white; }
+    --t4: #2d6cdf;
+    --t8: #1aa15f;
 
-        .label { font-size: 2.6vh; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
-        .timer { font-size: 12vh; font-weight: 900; line-height: 0.95; margin: 4px 0; }
-        .meta { font-size: 2vh; line-height: 1.35; display: flex; flex-direction: column; gap: 4px; }
-        .meta-line.meta-primary { font-weight: 800; }
-        .meta-line.meta-next { font-weight: 700; opacity: 0.9; }
-        .unit { font-size: 1.9vh; text-transform: uppercase; letter-spacing: 0.08em; }
+    --font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
 
-        #reset-btn {
-            position: fixed; bottom: 5px; left: 50%; transform: translateX(-50%);
-            font-size: 10px; opacity: 0.3; background: none; color: gray; border: 1px solid gray;
-        }
+* { box-sizing: border-box; }
 
-        #error { color: red; font-size: 14px; max-width: 480px; }
-        #updated-at { position: fixed; top: 5px; right: 10px; font-size: 10px; color: gray; }
-    </style>
+body {
+    margin: 0;
+    height: 100vh;
+    width: 100vw;
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+}
+
+#grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    height: 100vh;
+    width: 100vw;
+    gap: 1px;
+    background: #000;
+}
+
+/* ───────── Setup Overlay ───────── */
+
+#setup-overlay {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    color: #000;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+}
+
+input {
+    font-size: 18px;
+    padding: 12px;
+    width: 320px;
+    margin: 16px 0;
+    border: 2px solid #000;
+}
+
+button {
+    font-size: 18px;
+    padding: 10px 28px;
+    background: #000;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+}
+
+/* ───────── Quadrants ───────── */
+
+.quadrant {
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    gap: 14px;
+}
+
+/* Header row */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 2.4vh;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.line-pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: 0.9em;
+}
+
+.t4 { background: var(--t4); }
+.t8 { background: var(--t8); }
+
+.direction {
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+
+/* Time */
+.timer {
+    font-size: 11vh;
+    font-weight: 900;
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+}
+
+.timer .unit {
+    font-size: 0.38em;
+    font-weight: 700;
+    opacity: 0.75;
+    margin-left: 4px;
+}
+
+/* Meta */
+.meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.meta-primary {
+    font-size: 2.4vh;
+    font-weight: 700;
+}
+
+.meta-secondary {
+    font-size: 2vh;
+    color: var(--muted);
+}
+
+.meta-next {
+    font-size: 1.8vh;
+    color: var(--faint);
+}
+
+/* Urgent state (JS can toggle this) */
+.urgent .timer {
+    color: var(--urgent);
+}
+
+/* Footer bits */
+#updated-at {
+    position: fixed;
+    top: 6px;
+    right: 10px;
+    font-size: 10px;
+    color: var(--faint);
+}
+
+#reset-btn {
+    position: fixed;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    opacity: 0.25;
+    background: none;
+    color: #888;
+    border: 1px solid #666;
+}
+</style>
 </head>
+
 <body>
-    <div id="setup-overlay">
-        <h1>Enter TfNSW API key</h1>
-        <p>Stored locally so you do not need to re-enter next time.</p>
-        <input id="api-key-input" type="password" placeholder="Ocp-Apim-Subscription-Key">
-        <button id="start-btn">Start</button>
-        <div id="error"></div>
-    </div>
 
-    <div id="grid">
-        <div class="quadrant q-city-t4" id="q-city-t4">
-            <div class="label">T4 to City</div>
-            <div class="timer" data-line="T4" data-direction="city">--</div>
-            <div class="meta" data-meta="T4-city">Waiting for data…</div>
+<div id="setup-overlay">
+    <h1>Enter TfNSW API key</h1>
+    <p>Stored locally so you do not need to re-enter next time.</p>
+    <input id="api-key-input" type="password" placeholder="Ocp-Apim-Subscription-Key">
+    <button id="start-btn">Start</button>
+    <div id="error"></div>
+</div>
+
+<div id="grid">
+
+    <div class="quadrant" id="q-city-t4">
+        <div class="header">
+            <span class="line-pill t4">T4</span>
+            <span class="direction">→ To City</span>
         </div>
-        <div class="quadrant q-city-t8" id="q-city-t8">
-            <div class="label">T8 to City</div>
-            <div class="timer" data-line="T8" data-direction="city">--</div>
-            <div class="meta" data-meta="T8-city">Waiting for data…</div>
+        <div class="timer" data-line="T4" data-direction="city">
+            --<span class="unit">m</span>
         </div>
-        <div class="quadrant q-south-t4" id="q-south-t4">
-            <div class="label">T4 away from City</div>
-            <div class="timer" data-line="T4" data-direction="south">--</div>
-            <div class="meta" data-meta="T4-south">Waiting for data…</div>
-        </div>
-        <div class="quadrant q-south-t8" id="q-south-t8">
-            <div class="label">T8 away from City</div>
-            <div class="timer" data-line="T8" data-direction="south">--</div>
-            <div class="meta" data-meta="T8-south">Waiting for data…</div>
+        <div class="meta" data-meta="T4-city">
+            <div class="meta-primary">Waiting for data…</div>
         </div>
     </div>
 
-    <button id="reset-btn" title="Clear stored key">Reset</button>
-    <div id="updated-at"></div>
+    <div class="quadrant" id="q-city-t8">
+        <div class="header">
+            <span class="line-pill t8">T8</span>
+            <span class="direction">→ To City</span>
+        </div>
+        <div class="timer" data-line="T8" data-direction="city">
+            --<span class="unit">m</span>
+        </div>
+        <div class="meta" data-meta="T8-city">
+            <div class="meta-primary">Waiting for data…</div>
+        </div>
+    </div>
+
+    <div class="quadrant" id="q-south-t4">
+        <div class="header">
+            <span class="line-pill t4">T4</span>
+            <span class="direction">← Away</span>
+        </div>
+        <div class="timer" data-line="T4" data-direction="south">
+            --<span class="unit">m</span>
+        </div>
+        <div class="meta" data-meta="T4-south">
+            <div class="meta-primary">Waiting for data…</div>
+        </div>
+    </div>
+
+    <div class="quadrant" id="q-south-t8">
+        <div class="header">
+            <span class="line-pill t8">T8</span>
+            <span class="direction">← Away</span>
+        </div>
+        <div class="timer" data-line="T8" data-direction="south">
+            --<span class="unit">m</span>
+        </div>
+        <div class="meta" data-meta="T8-south">
+            <div class="meta-primary">Waiting for data…</div>
+        </div>
+    </div>
+
+</div>
+
+<button id="reset-btn">Reset</button>
+<div id="updated-at"></div>
 
     <script>
         // Minimal single-file dashboard for Wolli Creek departures.
