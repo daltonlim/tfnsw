@@ -295,7 +295,9 @@ button {
         </div>
         <div class="setting-group">
             <label for="station-name-input">Station Name</label>
-            <input id="station-name-input" type="text" placeholder="Wolli Creek Station">
+            <input id="station-name-input" type="text" list="station-list" placeholder="Search for station..." autocomplete="off">
+            <datalist id="station-list"></datalist>
+            <div id="station-search-status" style="font-size: 12px; color: #666; margin-top: 4px;"></div>
         </div>
         <div class="setting-group">
             <label for="refresh-interval-input">Refresh Interval (seconds)</label>
@@ -370,7 +372,12 @@ button {
 
     <script>
         // Minimal single-file dashboard for Wolli Creek departures.
-        const PROXY_URL = "http://localhost:3000"; // local proxy to handle CORS
+        // Using free CORS proxy service
+        // Note: Many free proxies don't forward custom headers. If this doesn't work,
+        // you may need to use a proxy that supports headers or deploy your own backend.
+        // Alternative proxies to try: corsproxy.io, cors-anywhere, etc.
+        const CORS_PROXY = "https://corsproxy.io/?";
+        const TFNSW_API_BASE = "https://api.transport.nsw.gov.au/v1/tp";
 
         // Settings management
         function getWalkBuffer() {
@@ -401,6 +408,80 @@ button {
             document.getElementById("walk-buffer-input").value = getWalkBuffer();
             document.getElementById("station-name-input").value = getStationName();
             document.getElementById("refresh-interval-input").value = getRefreshInterval() / 1000;
+            // Clear previous search results
+            document.getElementById("station-list").innerHTML = "";
+            document.getElementById("station-search-status").textContent = "";
+        }
+
+        let stationSearchTimeout = null;
+        let stationSearchSetup = false;
+        async function searchStations(query) {
+            if (!query || query.length < 2) {
+                document.getElementById("station-list").innerHTML = "";
+                document.getElementById("station-search-status").textContent = "";
+                return;
+            }
+
+            const key = localStorage.getItem("tfnswApiKey");
+            if (!key) {
+                document.getElementById("station-search-status").textContent = "API key required";
+                return;
+            }
+
+            document.getElementById("station-search-status").textContent = "Searching...";
+
+            try {
+                const apiUrl = new URL(TFNSW_API_BASE + "/stop_finder");
+                apiUrl.searchParams.set("outputFormat", "rapidJSON");
+                apiUrl.searchParams.set("type_sf", "any");
+                apiUrl.searchParams.set("name_sf", query);
+                
+                const proxyUrl = CORS_PROXY + encodeURIComponent(apiUrl.toString());
+                const resp = await fetch(proxyUrl, { 
+                    headers: { 
+                        "Authorization": "apikey " + key,
+                        "X-Requested-With": "XMLHttpRequest"
+                    },
+                    cache: "no-store" 
+                });
+                if (!resp.ok) throw new Error("Search failed");
+                const data = await resp.json();
+                
+                const stations = (data?.locations || [])
+                    .filter(loc => {
+                        const name = (loc.name || loc.disassembledName || "").toLowerCase();
+                        return name.includes("station") && loc.type === "stop";
+                    })
+                    .slice(0, 20) // Limit to 20 results
+                    .map(loc => ({
+                        name: loc.name || loc.disassembledName || "",
+                        id: loc.id
+                    }));
+
+                const datalist = document.getElementById("station-list");
+                datalist.innerHTML = stations.map(s => `<option value="${s.name}">${s.name}</option>`).join("");
+                
+                if (stations.length === 0) {
+                    document.getElementById("station-search-status").textContent = "No stations found";
+                } else {
+                    document.getElementById("station-search-status").textContent = `${stations.length} station(s) found`;
+                }
+            } catch (err) {
+                document.getElementById("station-search-status").textContent = "Search error";
+                document.getElementById("station-list").innerHTML = "";
+            }
+        }
+
+        function setupStationSearch() {
+            if (stationSearchSetup) return; // Already set up
+            const stationInput = document.getElementById("station-name-input");
+            if (!stationInput) return; // Element not found
+            stationInput.addEventListener("input", (e) => {
+                clearTimeout(stationSearchTimeout);
+                const query = e.target.value.trim();
+                stationSearchTimeout = setTimeout(() => searchStations(query), 300); // Debounce 300ms
+            });
+            stationSearchSetup = true;
         }
 
         let refreshIntervalId = null;
@@ -455,6 +536,9 @@ button {
             hideOverlay();
             init();
         }
+
+        // Setup station search on page load
+        setupStationSearch();
 
         function hideOverlay() {
             overlay.style.display = "none";
@@ -545,21 +629,41 @@ button {
         }
 
         async function resolveStopId(key, name) {
-            const url = new URL(PROXY_URL + "/stop_finder");
-            url.searchParams.set("name", name);
-            const resp = await fetch(url, { headers: { "x-api-key": key }, cache: "no-store" });
+            const apiUrl = new URL(TFNSW_API_BASE + "/stop_finder");
+            apiUrl.searchParams.set("outputFormat", "rapidJSON");
+            apiUrl.searchParams.set("type_sf", "any");
+            apiUrl.searchParams.set("name_sf", name);
+            
+            const proxyUrl = CORS_PROXY + encodeURIComponent(apiUrl.toString());
+            const resp = await fetch(proxyUrl, { 
+                headers: { "Authorization": "apikey " + key },
+                cache: "no-store" 
+            });
             if (!resp.ok) throw new Error("Unable to find stop id. Check API key/proxy.");
             const data = await resp.json();
-            const match = data?.locations?.find(loc => loc.type === "stop" || loc.type === "station");
+            const match = data?.locations?.find(loc => {
+                const locName = (loc.name || loc.disassembledName || "").toLowerCase();
+                return locName.includes("station") && loc.type === "stop";
+            });
             if (!match) throw new Error("Stop not found for " + name);
             return match.id;
         }
 
         async function fetchDepartures(key, stopId) {
-            const url = new URL(PROXY_URL + "/departures");
-            url.searchParams.set("stopId", stopId);
+            const apiUrl = new URL(TFNSW_API_BASE + "/departure_mon");
+            apiUrl.searchParams.set("outputFormat", "rapidJSON");
+            apiUrl.searchParams.set("type_dm", "stop");
+            apiUrl.searchParams.set("name_dm", stopId);
+            apiUrl.searchParams.set("mode", "direct");
+            apiUrl.searchParams.set("depArrMacro", "dep");
+            apiUrl.searchParams.set("TfNSWSF", "true");
+            apiUrl.searchParams.set("limit", "30");
 
-            const resp = await fetch(url, { headers: { "x-api-key": key }, cache: "no-store" });
+            const proxyUrl = CORS_PROXY + encodeURIComponent(apiUrl.toString());
+            const resp = await fetch(proxyUrl, { 
+                headers: { "Authorization": "apikey " + key },
+                cache: "no-store" 
+            });
             if (!resp.ok) throw new Error("Failed to load departures. Check key/quota.");
             const data = await resp.json();
             const raw = data?.stopEvents || [];
