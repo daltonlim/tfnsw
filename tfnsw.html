@@ -58,6 +58,65 @@ body {
     text-align: center;
 }
 
+/* ───────── Settings Overlay ───────── */
+
+#settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    z-index: 99;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+}
+
+#settings-overlay.visible {
+    display: flex;
+}
+
+#settings-content {
+    background: #fff;
+    color: #000;
+    padding: 32px;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 100%;
+}
+
+#settings-content h2 {
+    margin-top: 0;
+    margin-bottom: 24px;
+}
+
+.setting-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.setting-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.setting-group input {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.button-group {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+
 input {
     font-size: 18px;
     padding: 12px;
@@ -188,16 +247,31 @@ button {
     color: var(--faint);
 }
 
-#reset-btn {
+#reset-btn,
+#settings-btn {
     position: fixed;
     bottom: 6px;
-    left: 50%;
-    transform: translateX(-50%);
     font-size: 10px;
     opacity: 0.25;
     background: none;
     color: #888;
     border: 1px solid #666;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+#reset-btn {
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+#settings-btn {
+    right: 6px;
+}
+
+#reset-btn:hover,
+#settings-btn:hover {
+    opacity: 0.5;
 }
 </style>
 </head>
@@ -210,6 +284,28 @@ button {
     <input id="api-key-input" type="password" placeholder="Ocp-Apim-Subscription-Key">
     <button id="start-btn">Start</button>
     <div id="error"></div>
+</div>
+
+<div id="settings-overlay">
+    <div id="settings-content">
+        <h2>Settings</h2>
+        <div class="setting-group">
+            <label for="walk-buffer-input">Walk Time (minutes)</label>
+            <input id="walk-buffer-input" type="number" min="0" placeholder="5">
+        </div>
+        <div class="setting-group">
+            <label for="station-name-input">Station Name</label>
+            <input id="station-name-input" type="text" placeholder="Wolli Creek Station">
+        </div>
+        <div class="setting-group">
+            <label for="refresh-interval-input">Refresh Interval (seconds)</label>
+            <input id="refresh-interval-input" type="number" min="5" placeholder="30">
+        </div>
+        <div class="button-group">
+            <button id="settings-cancel-btn">Cancel</button>
+            <button id="settings-save-btn">Save</button>
+        </div>
+    </div>
 </div>
 
 <div id="grid">
@@ -269,25 +365,76 @@ button {
 </div>
 
 <button id="reset-btn">Reset</button>
+<button id="settings-btn">Settings</button>
 <div id="updated-at"></div>
 
     <script>
         // Minimal single-file dashboard for Wolli Creek departures.
-        const WALK_BUFFER_MIN = 5; // time to walk from house to station
-        const STATION_NAME = "Wolli Creek Station";
-        const REFRESH_MS = 30_000;
         const PROXY_URL = "http://localhost:3000"; // local proxy to handle CORS
 
+        // Settings management
+        function getWalkBuffer() {
+            const stored = localStorage.getItem("tfnswWalkBuffer");
+            return stored ? parseInt(stored, 10) : 5;
+        }
+
+        function getStationName() {
+            return localStorage.getItem("tfnswStationName") || "Wolli Creek Station";
+        }
+
+        function getRefreshInterval() {
+            const stored = localStorage.getItem("tfnswRefreshInterval");
+            return stored ? parseInt(stored, 10) : 30_000;
+        }
+
+        function saveSettings() {
+            const walkBuffer = parseInt(document.getElementById("walk-buffer-input").value, 10);
+            const stationName = document.getElementById("station-name-input").value.trim();
+            const refreshInterval = parseInt(document.getElementById("refresh-interval-input").value, 10) * 1000;
+
+            if (walkBuffer >= 0) localStorage.setItem("tfnswWalkBuffer", walkBuffer);
+            if (stationName) localStorage.setItem("tfnswStationName", stationName);
+            if (refreshInterval >= 5000) localStorage.setItem("tfnswRefreshInterval", refreshInterval);
+        }
+
+        function loadSettings() {
+            document.getElementById("walk-buffer-input").value = getWalkBuffer();
+            document.getElementById("station-name-input").value = getStationName();
+            document.getElementById("refresh-interval-input").value = getRefreshInterval() / 1000;
+        }
+
+        let refreshIntervalId = null;
+
         const overlay = document.getElementById("setup-overlay");
+        const settingsOverlay = document.getElementById("settings-overlay");
         const apiInput = document.getElementById("api-key-input");
         const errorBox = document.getElementById("error");
         const updatedAt = document.getElementById("updated-at");
 
         const resetBtn = document.getElementById("reset-btn");
+        const settingsBtn = document.getElementById("settings-btn");
+        const settingsSaveBtn = document.getElementById("settings-save-btn");
+        const settingsCancelBtn = document.getElementById("settings-cancel-btn");
         const timers = document.querySelectorAll(".timer");
 
         resetBtn.addEventListener("click", () => {
             localStorage.removeItem("tfnswApiKey");
+            location.reload();
+        });
+
+        settingsBtn.addEventListener("click", () => {
+            loadSettings();
+            settingsOverlay.classList.add("visible");
+        });
+
+        settingsCancelBtn.addEventListener("click", () => {
+            settingsOverlay.classList.remove("visible");
+        });
+
+        settingsSaveBtn.addEventListener("click", () => {
+            saveSettings();
+            settingsOverlay.classList.remove("visible");
+            // Reload to apply new settings
             location.reload();
         });
 
@@ -320,7 +467,8 @@ button {
         async function init() {
             try {
                 await refresh();
-                setInterval(refresh, REFRESH_MS);
+                if (refreshIntervalId) clearInterval(refreshIntervalId);
+                refreshIntervalId = setInterval(refresh, getRefreshInterval());
             } catch (err) {
                 setError(err.message || String(err));
                 overlay.style.display = "flex";
@@ -331,7 +479,7 @@ button {
             const key = localStorage.getItem("tfnswApiKey");
             if (!key) return;
 
-            const stopId = await resolveStopId(key, STATION_NAME);
+            const stopId = await resolveStopId(key, getStationName());
             const departures = await fetchDepartures(key, stopId);
 
             const slots = {
@@ -366,18 +514,19 @@ button {
                 return;
             }
 
-            const leaveInMin = Math.floor((service.departure - Date.now()) / 60000) - WALK_BUFFER_MIN;
+            const walkBuffer = getWalkBuffer();
+            const leaveInMin = Math.floor((service.departure - Date.now()) / 60000) - walkBuffer;
             timerEl.textContent = formatLeave(leaveInMin);
             const depTime = new Date(service.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
             
             const nextLines = [];
             if (info?.next) {
-                const nextLeaveInMin = Math.floor((info.next.departure - Date.now()) / 60000) - WALK_BUFFER_MIN;
+                const nextLeaveInMin = Math.floor((info.next.departure - Date.now()) / 60000) - walkBuffer;
                 const nextDepTime = new Date(info.next.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
                 nextLines.push(`<div class="meta-line meta-next">Next: ${info.next.destination} at ${nextDepTime} (${formatLeave(nextLeaveInMin)})</div>`);
             }
             if (info?.next2) {
-                const next2LeaveInMin = Math.floor((info.next2.departure - Date.now()) / 60000) - WALK_BUFFER_MIN;
+                const next2LeaveInMin = Math.floor((info.next2.departure - Date.now()) / 60000) - walkBuffer;
                 const next2DepTime = new Date(info.next2.departure).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
                 nextLines.push(`<div class="meta-line meta-next">Then: ${info.next2.destination} at ${next2DepTime} (${formatLeave(next2LeaveInMin)})</div>`);
             }
