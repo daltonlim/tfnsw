@@ -15,7 +15,20 @@ A real-time dashboard for Sydney train departures, showing the next 3 trains for
 
 1. Get a TfNSW API key from [Transport NSW Open Data](https://opendata.transport.nsw.gov.au/)
 2. Open `index.html` in your browser
-3. Enter your API key when prompted (stored locally in browser)
+
+### Setting API Key
+
+You can set the API key in two ways:
+
+**Option 1: URL Parameter (Recommended for sharing)**
+```
+https://your-site.com/index.html?apiKey=your_api_key_here
+```
+The API key will be automatically saved to localStorage and removed from the URL.
+
+**Option 2: Enter in Browser**
+- Enter your API key when prompted (stored locally in browser)
+- Or use the Settings overlay after initial setup
 
 ## Deployment to GitHub Pages
 
