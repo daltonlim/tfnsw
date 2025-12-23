@@ -530,6 +530,19 @@ button {
             init();
         });
 
+        // Check for API key in URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const apiKeyFromUrl = urlParams.get("apiKey") || urlParams.get("token") || urlParams.get("key");
+        if (apiKeyFromUrl) {
+            localStorage.setItem("tfnswApiKey", apiKeyFromUrl);
+            // Remove API key from URL for security (don't leave it in browser history)
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.delete("apiKey");
+            newUrl.searchParams.delete("token");
+            newUrl.searchParams.delete("key");
+            window.history.replaceState({}, "", newUrl);
+        }
+
         const saved = localStorage.getItem("tfnswApiKey");
         if (saved) {
             apiInput.value = saved;
